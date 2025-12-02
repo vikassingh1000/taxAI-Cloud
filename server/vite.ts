@@ -1,26 +1,9 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
-import { createServer as createViteServer, createLogger } from "vite";
 import { type Server } from "http";
-import viteConfig from "../vite.config";
-import { nanoid } from "nanoid";
 
-I // Get __dirname equivalent for ESM
-// In production (bundled), use process.cwd()/dist as the base
-// In development, use import.meta.url
-function getDirname(): string {
-  if (process.env.NODE_ENV === 'production') {
-    return path.join(process.cwd(), 'dist');
-  }
-  return path.dirname(fileURLToPath(import.meta.url));
-}
-
-const __dirname = getDirname();
-
-const viteLogger = createLogger();
-
+// Log helper function
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
@@ -32,7 +15,16 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
+// Development-only: Setup Vite dev server
+// This function dynamically imports vite and config only when needed
 export async function setupVite(app: Express, server: Server) {
+  // Dynamic imports to avoid bundling vite in production
+  const { createServer: createViteServer, createLogger } = await import("vite");
+  const { default: viteConfig } = await import("../vite.config");
+  const { nanoid } = await import("nanoid");
+
+  const viteLogger = createLogger();
+
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
@@ -59,8 +51,7 @@ export async function setupVite(app: Express, server: Server) {
 
     try {
       const clientTemplate = path.resolve(
-        __dirname,
-        "..",
+        process.cwd(),
         "client",
         "index.html",
       );
@@ -80,8 +71,9 @@ export async function setupVite(app: Express, server: Server) {
   });
 }
 
+// Production: Serve static files from dist/public
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(__dirname, "public");
+  const distPath = path.resolve(process.cwd(), "dist", "public");
 
   if (!fs.existsSync(distPath)) {
     throw new Error(
