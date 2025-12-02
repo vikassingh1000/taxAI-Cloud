@@ -7,9 +7,17 @@ import { type Server } from "http";
 import viteConfig from "../vite.config";
 import { nanoid } from "nanoid";
 
-// Get __dirname equivalent for ESM (works in both dev and bundled production)
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+I // Get __dirname equivalent for ESM
+// In production (bundled), use process.cwd()/dist as the base
+// In development, use import.meta.url
+function getDirname(): string {
+  if (process.env.NODE_ENV === 'production') {
+    return path.join(process.cwd(), 'dist');
+  }
+  return path.dirname(fileURLToPath(import.meta.url));
+}
+
+const __dirname = getDirname();
 
 const viteLogger = createLogger();
 

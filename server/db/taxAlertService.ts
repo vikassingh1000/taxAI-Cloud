@@ -16,7 +16,13 @@ import { fileURLToPath } from 'url';
  * Find project root by looking for package.json
  */
 function findProjectRoot(): string {
-  // Start from current module's directory
+  // In production (bundled), use process.cwd() as the project root
+  // In development, walk up from current file to find package.json
+  if (process.env.NODE_ENV === 'production') {
+    return process.cwd();
+  }
+
+  // Start from current module's directory (development only)
   const currentFile = fileURLToPath(import.meta.url);
   let dir = path.dirname(currentFile);
 
