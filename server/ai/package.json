@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "ai-example": "tsx example.ts"
+  }
+}
