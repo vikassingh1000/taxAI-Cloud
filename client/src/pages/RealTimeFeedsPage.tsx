@@ -1,11 +1,11 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Radio, Search, TrendingUp, FileText, Zap, Globe, Filter } from "lucide-react";
+import { Radio, Search, TrendingUp, FileText, Zap, Globe, Filter, Wifi, WifiOff } from "lucide-react";
 
 interface FeedItem {
   id: string;
@@ -24,16 +24,78 @@ export default function RealTimeFeedsPage() {
   const [selectedJurisdiction, setSelectedJurisdiction] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [searchText, setSearchText] = useState("");
+  const [isConnected, setIsConnected] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    fetch("/api/feeds")
-      .then((res) => res.json())
-      .then((data) => {
-        setFeedItems(data);
-        setFilteredFeeds(data);
-      })
-      .catch((err) => console.error("Error fetching feeds:", err));
+  // WebSocket connection with auto-reconnect
+  const connectWebSocket = useCallback(() => {
+    // Determine WebSocket URL based on current location
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws/feeds`;
+
+    console.log("Connecting to WebSocket:", wsUrl);
+
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log("WebSocket connected");
+      setIsConnected(true);
+      // Clear any pending reconnect timeout
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        console.log("WebSocket message received:", message.type);
+
+        if (message.type === "feeds") {
+          setFeedItems(message.data);
+        } else if (message.type === "new_feed") {
+          // Add new feed to the top of the list
+          setFeedItems((prev) => [message.data, ...prev]);
+        }
+      } catch (error) {
+        console.error("Error parsing WebSocket message:", error);
+      }
+    };
+
+    ws.onclose = (event) => {
+      console.log("WebSocket disconnected:", event.code, event.reason);
+      setIsConnected(false);
+      wsRef.current = null;
+
+      // Auto-reconnect after 3 seconds
+      reconnectTimeoutRef.current = setTimeout(() => {
+        console.log("Attempting to reconnect WebSocket...");
+        connectWebSocket();
+      }, 3000);
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+    };
   }, []);
+
+  // Initialize WebSocket connection
+  useEffect(() => {
+    connectWebSocket();
+
+    // Cleanup on unmount
+    return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [connectWebSocket]);
 
   useEffect(() => {
     let filtered = [...feedItems];
@@ -77,8 +139,7 @@ export default function RealTimeFeedsPage() {
   function renderMetaLine(item: FeedItem) {
     const meta = [
       item.timestamp,
-      item.type,
-      item.category
+      item.type
     ].filter(Boolean);
 
     return (
@@ -104,9 +165,18 @@ export default function RealTimeFeedsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Badge className="bg-[#22C55E] text-white gap-1">
-              <Radio className="h-3 w-3 animate-pulse" />
-              LIVE
+            <Badge className={`${isConnected ? "bg-[#22C55E]" : "bg-gray-400"} text-white gap-1`}>
+              {isConnected ? (
+                <>
+                  <Wifi className="h-3 w-3 animate-pulse" />
+                  LIVE
+                </>
+              ) : (
+                <>
+                  <WifiOff className="h-3 w-3" />
+                  OFFLINE
+                </>
+              )}
             </Badge>
             <select
               className="border border-gray-300 rounded p-2 min-w-[130px] text-sm"

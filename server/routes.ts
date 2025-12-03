@@ -14,16 +14,21 @@
 //   return httpServer;
 // }
 
-// Changes: 
+// Changes:
 // Adding application route
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import feedsRouter from "./routes/feeds";
+import { initializeWebSocket } from "./services/websocket";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // prefix all routes with /api
-  app.use("/api/feeds", feedsRouter); 
+  app.use("/api/feeds", feedsRouter);
 
   const httpServer = createServer(app);
+
+  // Initialize WebSocket server for real-time feeds
+  initializeWebSocket(httpServer);
+
   return httpServer;
 }
